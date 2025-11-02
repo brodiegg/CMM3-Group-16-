@@ -117,26 +117,40 @@ class QuarterCarModel:
         self.k = self.config['k']
         self.kt = self.config['kt']
         
-    def system_dynamics(self, t, y, c, road_func, vehicle_speed, current_position):
-        """
-        System ODEs for quarter-car model
-        State vector: y = [x1, x1_dot, x2, x2_dot]
-        x1: car body position
-        x2: wheel position
-        """
-        x1, x1_dot, x2, x2_dot = y
-        
-        # Get road input at current position
-        position = current_position + vehicle_speed * t
-        xr = road_func(position)
-        xr_dot = road_func.derivative()(position) * vehicle_speed
-        
-        # Calculate accelerations
-        x1_ddot = -(self.k * (x1 - x2) + c * (x1_dot - x2_dot)) / self.M1
-        x2_ddot = (self.k * (x1 - x2) + c * (x1_dot - x2_dot) - 
-                   self.kt * (x2 - xr) - 0.01 * self.kt * (x2_dot - xr_dot)) / self.M2
-        
-        return [x1_dot, x1_ddot, x2_dot, x2_ddot]
+   def system_dynamics(self, t, y, c, road_func, vehicle_speed, current_position):
+        """
+        System ODEs for quarter-car model
+        State vector:
+            y = [x1, x1_dot, x2, x2_dot]
+            x1      : car body (sprung mass) position [m]
+            x1_dot  : car body velocity [m/s]
+            x2      : wheel center (unsprung mass) position [m]
+            x2_dot  : wheel velocity [m/s]
+                
+        """
+        # Unpack state
+        x1, x1_dot, x2, x2_dot = y
+
+        # Current road position
+        position = current_position + vehicle_speed * t
+
+        # Vertical road displacement
+        xr = road_func(position)
+
+        # Suspension force for sprung mass M1 (spring + damper)
+        F_susp = self.k * (x1 - x2) + c * (x1_dot - x2_dot)
+
+        # Tire force for unsprung mass M2 (elastic only)
+        F_tire = self.kt * (x2 - xr)
+
+        # Equations of motion
+        x1_ddot = -F_susp / self.M1
+        x2_ddot = (F_susp - F_tire) / self.M2
+
+        # Return derivatives
+        return [x1_dot, x1_ddot, x2_dot, x2_ddot]
+
+
     
     def simulate(self, c, road_profile, vehicle_speed, sim_time):
         """Simulate system response with given damping coefficient"""
