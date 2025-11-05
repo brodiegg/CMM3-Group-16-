@@ -169,14 +169,13 @@ class QuarterCarModel:
             for i in range(sample_rate+1):
                 t_current = t_eval[i]
                 
-                # Calculate the derivative (f(t, y))
-                # Note: We pass the extra parameters required by the original system_dynamics function
+                # Calculate the derivative
                 f_ty = system_dynamics_func(t_current, y_current, c, road_interpolator, vehicle_speed, 0)
                 
-                # Apply the Euler step: y_next = y_current + h * f(t, y)
+                # Apply the Euler step
                 y_next = y_current + h * f_ty
                 
-                # Store the result and update the current state
+                # Store the result and update the current y value
                 y_sol[i+1, :] = y_next
                 y_current = y_next
 
