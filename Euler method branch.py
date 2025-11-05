@@ -158,15 +158,14 @@ class QuarterCarModel:
             dynamics, t_span, y0, t_eval=t_eval,
             method='RK45', rtol=1e-6, atol=1e-9
         )
-
-        return sol.t, sol.y
         
         # Solve ODEs using Euler method
         def euler(system_dynamics_func, y0, t_eval, h, c, road_interpolator, vehicle_speed):
-
+            y_sol = np.zeros((len(t_eval), len(y0)))
             y_current = np.array(y0)
+            y_sol[0, :]=y_current
         
-            for i in range(sample_rate+1):
+            for i in range(len(t_eval)-1):
                 t_current = t_eval[i]
                 
                 # Calculate the derivative
@@ -181,6 +180,13 @@ class QuarterCarModel:
 
             return t_eval, y_sol.T
         
+        t_euler, y_euler = euler(self.system_dynamics, y0, t_eval, h, c, road_profile.interpolator, vehicle_speed)
+        
+        if np.isclose(sol.y, y_sol.T, 0.05, 0):
+            return sol,y, sol.t
+        else:
+            return sol.y, y_euler
+    
 class ISO2631Evaluator:
     """Evaluate comfort metrics according to ISO 2631-1"""
     
