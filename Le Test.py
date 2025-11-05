@@ -525,3 +525,4 @@ if __name__ == "__main__":
         print(f"{key:<25} {'Newton-Raphson':<15} {value['c_newton']:<15.1f} {value['comfort_newton']:<10.4f}")
         print(f"{'':<25} {'Bisection':<15} {value['c_bisection']:<15.1f} {value['comfort_bisection']:<10.4f}")
         print("-" * 65)
+
