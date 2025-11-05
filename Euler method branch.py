@@ -181,7 +181,8 @@ class QuarterCarModel:
             return t_eval, y_sol.T
         
         t_euler, y_euler = euler(self.system_dynamics, y0, t_eval, h, c, road_profile.interpolator, vehicle_speed)
-        
+
+        # Compares the result from the Runge-Kutta method and Euler method
         if np.isclose(sol.y, y_sol.T, 0.05, 0):
             return sol,y, sol.t
         else:
