@@ -29,22 +29,19 @@ def ISO_filter(frequency):
     weights = np.ones_like(frequency) * 0.045 #creates an array like frequency with every value at 0.045
     
     if np.any(boolean_f):
-        log_freq = np.log10(frequency[boolean_f])
+        log_freq = np.log10(frequency[boolean_f]) #selects only the elements in the array that are true
         log_weight = p(log_freq)
-        weights[boolean_f] = 10**log_weight
+        weights[boolean_f] = 10**log_weight #calculates the weights and added into the weights array
     
     return weights
 
 def apply_iso_filter_simple(signal, time, dt):
-    """
-    Simple frequency-domain filtering using the original polynomial method
-    """
-    n = len(signal)
-    frequencies = np.fft.rfftfreq(n, dt)
-    fft_signal = np.fft.rfft(signal)
+    n = len(signal) #calculates the number of data points in the input signal
+    frequencies = np.fft.rfftfreq(n, dt) #calculates the discrete frequencies
+    fft_signal = np.fft.rfft(signal) #fourier transform
     iso_weights = ISO_filter(frequencies)
     weighted_fft = fft_signal * iso_weights
-    filtered_signal = np.fft.irfft(weighted_fft, n)
+    filtered_signal = np.fft.irfft(weighted_fft, n) #converts back into time domain
     
     return filtered_signal
 
