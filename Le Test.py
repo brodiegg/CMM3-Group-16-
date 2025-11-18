@@ -153,6 +153,32 @@ class QuarterCarModel:
             t_span, y0, t_eval=t_eval, method='RK45', rtol=1e-6
         )
         
+        # Solve ODEs using Euler method
+        def euler(system_dynamics_func, y0, t_eval, h, c, road_interpolator, vehicle_speed):
+            t_points = np.asarray(t_eval)
+            num_steps = len(t_points)
+            # y_sol will store the solution: shape (num_time_points, num_variables)
+            y_sol = np.zeros((num_steps, len(y0)))
+            y_sol[0, :] = y0
+        
+            y_current = np.array(y0)
+        
+            for i in range(num_steps - 1):
+                t_current = t_points[i]
+                
+                # Calculate the derivative (f(t, y))
+                # Note: We pass the extra parameters required by the original system_dynamics function
+                f_ty = system_dynamics_func(t_current, y_current, c, road_interpolator, vehicle_speed, 0)
+                
+                # Apply the Euler step: y_next = y_current + h * f(t, y)
+                y_next = y_current + h * f_ty
+                
+                # Store the result and update the current state
+                y_sol[i+1, :] = y_next
+                y_current = y_next
+
+            return t_points, y_sol.T
+        
         return sol.t, sol.y
 
 class ISO2631Evaluator:
