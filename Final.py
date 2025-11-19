@@ -285,9 +285,11 @@ VEHICLE_SPEED = 10    # Constant vehicle speed in m/s
 SIM_TIME = 8          # Total simulation time in seconds
 DT = 0.01             # Time step for some calculations (not always used)
 
-# ============================================================================
-# ROAD PROFILE GENERATION
-# ============================================================================
+
+'''
+Road Profile Generation
+'''
+
 
 road_length = 100 # Total road length in meters
 No_points_smooth = 20 # Number of sample points for smooth road
@@ -297,60 +299,97 @@ h_range_rough = 0.5 # Max absolute height (m) for rough road
 No_Road_Profiles = 1 # Number of road profiles to generate
 
 def smooth_road_gen(seed, No_points_smooth, road_length, h_range_smooth):
+    # Set seed to ensure the same random road is generated every run
     np.random.seed(seed)
-    x_pos_smooth = np.linspace(0, road_length, No_points_smooth) # Generate equally distributed xpositions along the smooth road
-    h_values_smooth = np.random.uniform(-h_range_smooth, h_range_smooth, No_points_smooth) # Generate random heights within[-h_range_smooth, +h_range_smooth]
-    
-    h_values_smooth[0] = 0
-    h_values_smooth[-1] = 0 # Force the road to start and end at zero height
+    # Generate equally distributed x positions along the smooth road
+    x_pos_smooth = np.linspace(0, road_length, No_points_smooth)
+    # Generate random heights within[-h_range_smooth, +h_range_smooth]
+    h_values_smooth = np.random.uniform(-h_range_smooth, h_range_smooth, No_points_smooth)
 
-    return splrep(x_pos_smooth, h_values_smooth) # return cubic spline representation of the rough road
+    # Force the road to start and end at zero height
+    h_values_smooth[0] = 0
+    h_values_smooth[-1] = 0
+
+    # return cubic spline representation of the rough road
+    return splrep(x_pos_smooth, h_values_smooth)
 
 def rough_road_gen(seed, No_points_rough, road_length, h_range_rough):
     """
-    Create natural rough road base + sharp impulses for CF > 9
+    Create natural rough road base, Medium-scale features and sharp impulses for large crest factor
     """
+    # Set seed to ensure the same random road is generated every run
     np.random.seed(seed)
-    x_pos_rough = np.linspace(0, road_length, No_points_rough) # Generate equally distributed xpositions along the rough road
+    # Generate equally distributed xpositions along the rough road
+    x_pos_rough = np.linspace(0, road_length, No_points_rough)
     
-    # LAYER 1: Natural rough road base
-    base_amplitude = 0.05 # Define base roughness amplitude in meters
-    h_values_rough = np.random.uniform(-base_amplitude, base_amplitude, No_points_rough) # Random heights in[-base_amplitude, base_amplitude] for each point
-    window = 5 # Window size for moving average smoothing
-    h_values_rough = np.convolve(h_values_rough, np.ones(window)/window, mode='same') # Apply a simple moving average filter to smooth the random noise
+    # Layer 1: Natural rough road base
+    # Define base roughness amplitude in meters
+    base_amplitude = 0.05
+    # Random heights in[-base_amplitude, base_amplitude] for each point
+    h_values_rough = np.random.uniform(-base_amplitude, base_amplitude, No_points_rough)
     
-    # LAYER 2: Medium-scale features
-    n_medium_features = np.random.randint(5, 8) # Random number of medium-sized features(between 5 and 7)
+    # Smooth these raw random values using a moving-average filter.
+    # Each point is replaced by the average of itself and its 4 nearest neighbors.
+    window = 5
+    # Apply a moving-average filter to reduce high-frequency noise and create a natural rough-road base
+    h_values_rough = np.convolve(h_values_rough, np.ones(window)/window, mode='same')
+    
+    # Layer 2: Medium-scale features
+    # Generate random number of medium-sized features(between 5 and 7)
+    n_medium_features = np.random.randint(5, 8)
+    
     for _ in range(n_medium_features):
-        pos = np.random.uniform(10, road_length - 10) # Choose a random center position for this feature
-        idx = np.argmin(np.abs(x_pos_rough - pos)) # Find the index of the grid point closest to this position
-        width = np.random.randint(20, 40) # Random half-width of the feature
+        # Pick a random ideal centre position along the road in continuous space, but road is stored at discrete sample points x_pos_rough
+        # Remove the edges so that the whole bump will be placed inside the road length
+        pos = np.random.uniform(10, road_length - 10)
+        # find the index of the discrete sample point whose x-position is closest to the ideal center position picked in continuous space
+        idx = np.argmin(np.abs(x_pos_rough - pos))
+        # Random half-width of the feature
+        width = np.random.randint(20, 40)
         
+        # Add a smoothly shaped bump or dip around the centre index
+        # We step through the range of j values to modify points near the centre
         for j in range(-width, width): 
             if 0 <= idx + j < No_points_rough:
-                amplitude = np.random.uniform(0.045, 0.065) # Random amplitude for this feature
-                sign = np.random.choice([-1, 1]) # Random sign(bump or dip)
-                h_values_rough[idx + j] += sign * amplitude * np.exp(-(j**2)/(2*(width/3)**2)) # Gaussian envelope based on j
+                # Random amplitude for this feature
+                amplitude = np.random.uniform(0.045, 0.065) 
+                # Random amplitude for this feature
+                sign = np.random.choice([-1, 1])
+                # Gaussian shaped feature based on j
+                h_values_rough[idx + j] += sign * amplitude * np.exp(-(j**2)/(2*(width/3)**2))
     
-    # LAYER 3: Sharp impulses for high crest factor
-    n_impulses = np.random.randint(3, 5) # Random number of sharp impulses(3 or 4)
-    impulse_positions = np.linspace(20, road_length - 20, n_impulses) # Equally distributed positions where impulses will be placed
+    # Layer 3: Sharp impulses for high crest factor
+    # Generate random number of sharp impulses(3 or 4)
+    n_impulses = np.random.randint(3, 5) 
+    # Equally distributed positions where impulses will be placed
+    # We space them evenly between 20 m and (road_length - 20 m) so that they are not too close to the boundaries
+    impulse_positions = np.linspace(20, road_length - 20, n_impulses) 
     
     for pos in impulse_positions:
-        idx = np.argmin(np.abs(x_pos_rough - pos)) # Find the closest index
-        impulse_amplitude = np.random.uniform(0.3, 0.6) # Random large amplitude for the impulse
-        impulse_sign = np.random.choice([-1, 1]) # Random sign(bump or dip)
-        impulse_width = 5 # Define half-width of the impulse
+        # Again 'pos' is a continuous target position along the road
+        # We find the index of the sample point whose x-position is closest to 'pos'
+        idx = np.argmin(np.abs(x_pos_rough - pos))
+        # Random large amplitude for the impulse
+        impulse_amplitude = np.random.uniform(0.3, 0.6)
+        # Random large amplitude for the impulse
+        impulse_sign = np.random.choice([-1, 1])
+        # Define half-width of the impulse
+        impulse_width = 5
         
+        # Add a sharp bump or dip around the centre index
+        # We step through the range of j values to modify points near the centre
         for j in range(-impulse_width, impulse_width + 1):
             if 0 <= idx + j < No_points_rough:
-                decay = 1.0 - abs(j) / (impulse_width + 1) # Decay linearly from center to edges(1 at center, 0 near edges)
+                # Decay linearly from center to edges(1 at center, 0 near edges)
+                decay = 1.0 - abs(j) / (impulse_width + 1)
                 h_values_rough[idx + j] += impulse_sign * impulse_amplitude * decay 
-    
+
+    # Force the road to start and end at zero height
     h_values_rough[0] = 0
-    h_values_rough[-1] = 0 # Force the road to start and end at zero height
-    
-    return splrep(x_pos_rough, h_values_rough) # return cubic spline representation of the rough road
+    h_values_rough[-1] = 0
+
+    # return cubic spline representation of the rough road
+    return splrep(x_pos_rough, h_values_rough)
 
 
 '''
@@ -827,6 +866,7 @@ def run_comprehensive_analysis():
 
 #Main Execution of code
 all_results = run_comprehensive_analysis()
+
 
 
 
