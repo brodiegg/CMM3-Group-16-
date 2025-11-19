@@ -613,27 +613,29 @@ def newton_numerical(f, x0, x_range, h=10, epsilon=1e-6, max_iter=20):
     print(f"Newton reached maximum iterations")
     return xn, f(xn)
 
-# ============================================================================
-# MAIN OPTIMIZATION - COMPLETE OUTPUT FOR ALL CONFIGURATIONS
-# ============================================================================
+'''
+Main Optimisation Flow Function
+'''
 
 def analyze_vehicle_road_combination(vehicle_name, road_spline, road_type, road_id):
-    """
-    Analyze suspension performance for a specific vehicle and road combination
-    """
+ #Finds the optimal suspension damping for a vehicle on a specific road.
+ # starts by setting up the specifc comfort function with the specific penaltie, then does root finding
+ # to determine best damping coefficent, then returns results.
+ 
+    # Get vehicle configuration from dictionary
     config = VEHICLE_CONFIGS[vehicle_name]
     
     # Choose the appropriate comfort function based on road type
     if road_type == "smooth":
-        comfort_func = create_comfort_function_smooth(config, road_spline, VEHICLE_SPEED, SIM_TIME)
+        comfort_func = create_comfort_function_smooth(config, vehicle_name, road_spline, VEHICLE_SPEED, SIM_TIME)
         road_name = f"Smooth_Road_{road_id}"
     else:
-        comfort_func = create_comfort_function_rough(config, road_spline, VEHICLE_SPEED, SIM_TIME)
+        comfort_func = create_comfort_function_rough(config, vehicle_name, road_spline, VEHICLE_SPEED, SIM_TIME)
         road_name = f"Rough_Road_{road_id}"
     
-    print(f"\n{'='*70}")
-    print(f"ANALYZING: {vehicle_name} on {road_name}")
-    print(f"{'='*70}")
+    print('-')
+    print(f"Analysing: {vehicle_name} on {road_name}")
+    print('-')
     
     # Use BOTH root finding methods
     c_newton, comfort_newton = newton_numerical(
@@ -662,196 +664,106 @@ def analyze_vehicle_road_combination(vehicle_name, road_spline, road_type, road_
         comfort_optimal = comfort_bisection
         best_method = "Bisection"
     
-    # Get detailed results for optimal point
-    t_rk, y_rk = solve_suspension_odes_rk4(c_optimal, config['M1'], config['M2'], 
-                                          config['k'], config['kt'], road_spline, 
-                                          VEHICLE_SPEED, SIM_TIME, h=0.001)
-    accel_rk = y_rk[1, :]
+    # Get detailed results for optimal point using RK4 (main method)
+    t_rk, y_RK4  = solve_suspension_odes_rk4(c_optimal, config['M1'], config['M2'], config['k'], config['kt'], road_spline, VEHICLE_SPEED, SIM_TIME, h=0.001)
+    accel_rk = y_RK4 [1, :]
     
-    # Apply complete pipeline for optimal case
+    # Also solve with Euler for comparison
+    t_eul, y_eul = solve_suspension_odes_euler(c_optimal, config['M1'], config['M2'], config['k'], config['kt'], road_spline, VEHICLE_SPEED, SIM_TIME, h=0.001)
+    
+    accel_eul = y_eul[1, :]
+    
+    
+    # Apply complete pipeline for optimal case (RK4)
     weighted_accel_optimal = apply_iso_filter_simple(accel_rk, t_rk, t_rk[1]-t_rk[0])
     comfort_value_opt, crest_factor_opt, metric_used_opt, rms_value_opt = calculate_comfort_metrics(weighted_accel_optimal, t_rk)
     
-    # Use appropriate penalty functions based on road type
-    if road_type == "smooth":
-        suspension_penalty_opt, max_deflection_opt = calculate_suspension_deflection_penalty_smooth(y_rk)
-        force_penalty_opt, force_rms_opt, _ = calculate_suspension_force_penalty_smooth(y_rk, config['k'], c_optimal)
+    
+    # Calculate maximum acceleration comparisons
+    max_accel_rk = np.max(np.abs(accel_rk))
+    max_accel_euler = np.max(np.abs(accel_eul))
+    if max_accel_rk == 0:
+        max_accel_diff_percent = 0.0
     else:
-        suspension_penalty_opt, max_deflection_opt = calculate_suspension_deflection_penalty_rough(y_rk)
-        force_penalty_opt, force_rms_opt, _ = calculate_suspension_force_penalty_rough(y_rk, config['k'], c_optimal)
+        max_accel_diff_percent = ((max_accel_euler - max_accel_rk) / max_accel_rk) * 100
+    
+    # Use appropriate penalty functions
+    if road_type == "smooth":
+        deflection_func = config['deflection_smooth']
+        force_func = config['force_smooth']
+    else:
+        deflection_func = config['deflection_rough']
+        force_func = config['force_rough']
+
+    # Calculate penalties for the optimal solution
+    suspension_penalty_opt, max_deflection_opt = deflection_func(y_RK4, config)
+    force_penalty_opt, force_rms_opt, _  = force_func(y_RK4, config, c_optimal, VEHICLE_SPEED) # '_'  python convention for ignoring/unwanted variables 
     
     # Print detailed breakdown for optimal solution
-    print(f"\n{'='*70}")
+    print("-")
     print(f"OPTIMAL SOLUTION BREAKDOWN:")
-    print(f"  Base Comfort:        {comfort_value_opt:.6f} m/s²")
-    print(f"  Suspension Penalty:  {suspension_penalty_opt:.6f}")
-    print(f"  Force Penalty:       {force_penalty_opt:.6f}")
-    print(f"  TOTAL:              {comfort_optimal:.6f}")
-    print(f"  Max Deflection:      {max_deflection_opt*100:.2f} cm")
-    print(f"  Force RMS:           {force_rms_opt:.1f} N")
-    print(f"  Crest Factor:        {crest_factor_opt:.2f} ({metric_used_opt})")
-    print(f"{'='*70}")
-    
-    # Generate data for plotting
+    print(f"  Base Comfort (RK4):        {comfort_value_opt:.6f} m/s²")
+    print(f"  Max Accel (RK4):           {max_accel_rk:.6f} m/s²")
+    print(f"  Max Accel (Euler):         {max_accel_euler:.6f} m/s²")
+    print(f"  Max Accel Difference:      {max_accel_diff_percent:+.2f}%")
+    print(f"  Suspension Penalty:        {suspension_penalty_opt:.6f}")
+    print(f"  Force Penalty:             {force_penalty_opt:.6f}")
+    print(f"  TOTAL:                     {comfort_optimal:.6f}")
+    print(f"  Max Deflection:            {max_deflection_opt*100:.2f} cm")
+    print(f"  Force RMS:                 {force_rms_opt:.1f} N")
+    print(f"  Crest Factor:              {crest_factor_opt:.2f} ({metric_used_opt})")
+    print("-")
+
+    # Generate data for plotting the comfort curve
     c_values_plot = np.linspace(config['c_range'][0], config['c_range'][1], 50)
     comfort_values_plot = [comfort_func(c) for c in c_values_plot]
+
+    # Create the 3-graph figure
+    fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(18, 5))
     
-    # Generate deflection and force data for plotting
-    max_deflections_plot = []
-    force_rms_plot = []
+    # GRAPH 1: Road Profile
+    road_positions = np.linspace(0, road_length, 1000)
+    road_heights = [splev(pos, road_spline) for pos in road_positions]
     
-    for c_val in c_values_plot:
-        t_temp, y_temp = solve_suspension_odes_rk4(c_val, config['M1'], config['M2'], 
-                                                  config['k'], config['kt'], road_spline, 
-                                                  VEHICLE_SPEED, 2.0, h=0.001)
-        x1 = y_temp[0, :]
-        x2 = y_temp[2, :]
-        x1_dot = y_temp[1, :]
-        x2_dot = y_temp[3, :]
-        
-        max_deflections_plot.append(np.max(np.abs(x1 - x2)))
-        
-        suspension_force = config['k'] * (x1 - x2) + c_val * (x1_dot - x2_dot)
-        force_rms_plot.append(np.sqrt(np.mean(suspension_force**2)))
+    ax1.plot(road_positions, road_heights, 'b-', linewidth=2)
+    ax1.set_xlabel('Position (m)', fontsize=12, fontweight='bold')
+    ax1.set_ylabel('Road Height (m)', fontsize=12, fontweight='bold')
+    ax1.set_title(f'{road_type.capitalize()} Road Profile', fontsize=14, fontweight='bold')
+    ax1.grid(True, alpha=0.3)
+    ax1.set_xlim([0, road_length])
     
-    # Store all data for later plotting
-    plot_data = {
-        'vehicle_name': vehicle_name,
-        'road_name': road_name,
-        'road_type': road_type,
-        'road_spline': road_spline,
-        'c_values_plot': c_values_plot,
-        'comfort_values_plot': comfort_values_plot,
-        'max_deflections_plot': max_deflections_plot,
-        'force_rms_plot': force_rms_plot,
-        't_rk': t_rk,
-        'weighted_accel_optimal': weighted_accel_optimal,
-        'c_newton': c_newton,
-        'comfort_newton': comfort_newton,
-        'c_bisection': c_bisection,
-        'comfort_bisection': comfort_bisection,
-        'c_optimal': c_optimal,
-        'comfort_optimal': comfort_optimal,
-        'best_method': best_method,
-        'crest_factor_opt': crest_factor_opt,
-        'metric_used_opt': metric_used_opt,
-        'max_deflection_opt': max_deflection_opt,
-        'force_rms_opt': force_rms_opt
-    }
+    # GRAPH 2: ISO Filtered Acceleration (Both Methods)
+    ax2.plot(t_rk, weighted_accel_optimal, 'b-', linewidth=1.5, alpha=0.8, label='RK4')
+    ax2.set_xlabel('Time (s)', fontsize=12, fontweight='bold')
+    ax2.set_ylabel('Weighted Acceleration (m/s²)', fontsize=12, fontweight='bold')
+    ax2.set_title(f'ISO 2631 Filtered Acceleration\n(CF={crest_factor_opt:.2f}, {metric_used_opt})', fontsize=14, fontweight='bold')
+    ax2.grid(True, alpha=0.3)
+    ax2.set_xlim([0, SIM_TIME])
+    ax2.legend()
+    
+    # GRAPH 3: Comfort vs Damping (SHOW BOTH FINAL RESULTS ONLY)
+    ax3.plot(c_values_plot, comfort_values_plot, 'g-', linewidth=3, label='Total Comfort', alpha=0.7)
+    
+    # Plot only final results (no iteration lines)
+    ax3.plot(c_newton, comfort_newton, 'bo', markersize=12, markeredgecolor='black', label=f'Newton: {c_newton:.0f} Ns/m')
+    ax3.plot(c_bisection, comfort_bisection, 'rs', markersize=12, markeredgecolor='black',label=f'Bisection: {c_bisection:.0f} Ns/m')
+    ax3.set_xlabel('Damping Coefficient c (Ns/m)', fontsize=12, fontweight='bold')
+    ax3.set_ylabel('Comfort Value (m/s²)', fontsize=12, fontweight='bold')
+    ax3.set_title(f'{vehicle_name} - Comfort vs Damping', fontsize=14, fontweight='bold')
+    ax3.grid(True, alpha=0.3)
+    ax3.legend(fontsize=10, loc='upper right')
+    
+    plt.tight_layout()
+    plt.show()
     
     return {
         'vehicle': vehicle_name,
         'road_name': road_name,
-        'road_type': road_type,
-        'c_newton': c_newton,
-        'comfort_newton': comfort_newton,
-        'c_bisection': c_bisection,
-        'comfort_bisection': comfort_bisection,
         'c_optimal': c_optimal,
         'comfort_optimal': comfort_optimal,
-        'best_method': best_method,
         'crest_factor': crest_factor_opt,
-        'max_deflection': max_deflection_opt,
-        'force_rms': force_rms_opt,
-        'base_comfort': comfort_value_opt,
-        'suspension_penalty': suspension_penalty_opt,
-        'force_penalty': force_penalty_opt,
-        'plot_data': plot_data
+        'max_accel_diff_percent': max_accel_diff_percent
     }
-
-def generate_all_plots(all_results):
-    """
-    Generate all 5-graph figures for each vehicle-road combination
-    """
-    print(f"\n{'='*80}")
-    print("GENERATING ALL GRAPHS")
-    print(f"{'='*80}")
-    
-    for i, result in enumerate(all_results):
-        plot_data = result['plot_data']
-        
-        print(f"Generating plot {i+1}/{len(all_results)}: {result['vehicle']} on {result['road_name']}")
-        
-        fig, ((ax1, ax2, ax3), (ax4, ax5, _)) = plt.subplots(2, 3, figsize=(22, 11))
-        _.remove()
-        
-        # GRAPH 1: Road Profile
-        road_positions = np.linspace(0, road_length, 1000)
-        road_heights = [splev(pos, plot_data['road_spline']) for pos in road_positions]
-        ax1.plot(road_positions, road_heights, 'b-', linewidth=2)
-        ax1.set_xlabel('Position (m)', fontsize=12, fontweight='bold')
-        ax1.set_ylabel('Road Height (m)', fontsize=12, fontweight='bold')
-        ax1.set_title(f'Road Profile: {plot_data["road_name"]}', fontsize=14, fontweight='bold')
-        ax1.grid(True, alpha=0.3)
-        ax1.set_xlim([0, road_length])
-        
-        # GRAPH 2: ISO Filtered Acceleration
-        ax2.plot(plot_data['t_rk'], plot_data['weighted_accel_optimal'], 'r-', linewidth=1.5, alpha=0.8)
-        ax2.set_xlabel('Time (s)', fontsize=12, fontweight='bold')
-        ax2.set_ylabel('Weighted Acceleration (m/s²)', fontsize=12, fontweight='bold')
-        ax2.set_title(f'ISO 2631 Filtered Acceleration\n(CF: {plot_data["crest_factor_opt"]:.2f}, {plot_data["metric_used_opt"]})', 
-                      fontsize=14, fontweight='bold')
-        ax2.grid(True, alpha=0.3)
-        ax2.set_xlim([0, SIM_TIME])
-        
-        # GRAPH 3: Comfort vs Damping
-        ax3.plot(plot_data['c_values_plot'], plot_data['comfort_values_plot'], 'g-', linewidth=3, label='Total Comfort', alpha=0.7)
-        ax3.plot(plot_data['c_newton'], plot_data['comfort_newton'], 'bo', markersize=12, markeredgecolor='black', 
-                 label=f'Newton: {plot_data["c_newton"]:.0f} Ns/m')
-        ax3.plot(plot_data['c_bisection'], plot_data['comfort_bisection'], 'rs', markersize=12, markeredgecolor='black',
-                 label=f'Bisection: {plot_data["c_bisection"]:.0f} Ns/m')
-        ax3.set_xlabel('Damping Coefficient c (Ns/m)', fontsize=12, fontweight='bold')
-        ax3.set_ylabel('Comfort Value (m/s²)', fontsize=12, fontweight='bold')
-        ax3.set_title('Comfort vs Damping - Root Finding Results', 
-                      fontsize=14, fontweight='bold')
-        ax3.grid(True, alpha=0.3)
-        ax3.legend(fontsize=10, loc='upper right')
-        
-        # GRAPH 4: Suspension Deflection
-        ax4.plot(plot_data['c_values_plot'], plot_data['max_deflections_plot'], 'orange', linewidth=3, label='Max Suspension Deflection')
-        ax4.axvline(x=plot_data['c_newton'], color='blue', linestyle='--', linewidth=2, label=f'Newton: {plot_data["c_newton"]:.0f}')
-        ax4.axvline(x=plot_data['c_bisection'], color='red', linestyle='--', linewidth=2, label=f'Bisection: {plot_data["c_bisection"]:.0f}')
-        ax4.axhline(y=0.15, color='black', linestyle='--', linewidth=1.5, 
-                    label='Max Limit (0.15 m)', alpha=0.7)
-        ax4.set_xlabel('Damping Coefficient c (Ns/m)', fontsize=12, fontweight='bold')
-        ax4.set_ylabel('Max Suspension Deflection (m)', fontsize=12, fontweight='bold')
-        ax4.set_title('Suspension Deflection vs Damping', fontsize=14, fontweight='bold')
-        ax4.grid(True, alpha=0.3)
-        ax4.legend(fontsize=9)
-        
-        # GRAPH 5: Suspension Force RMS
-        ax5.plot(plot_data['c_values_plot'], plot_data['force_rms_plot'], 'purple', linewidth=3, label='Suspension Force RMS')
-        ax5.axvline(x=plot_data['c_newton'], color='blue', linestyle='--', linewidth=2, label=f'Newton: {plot_data["c_newton"]:.0f}')
-        ax5.axvline(x=plot_data['c_bisection'], color='red', linestyle='--', linewidth=2, label=f'Bisection: {plot_data["c_bisection"]:.0f}')
-        
-        # Set appropriate force thresholds based on road type
-        if plot_data['road_type'] == "smooth":
-            ax5.axhline(y=200, color='orange', linestyle='--', linewidth=1.5, 
-                        label='Min Target (200 N)', alpha=0.7)
-            ax5.axhline(y=2000, color='darkred', linestyle='--', linewidth=1.5, 
-                        label='Max Target (2000 N)', alpha=0.7)
-        else:
-            ax5.axhline(y=500, color='orange', linestyle='--', linewidth=1.5, 
-                        label='Min Target (500 N)', alpha=0.7)
-            ax5.axhline(y=4000, color='darkred', linestyle='--', linewidth=1.5, 
-                        label='Max Target (4000 N)', alpha=0.7)
-        
-        ax5.set_xlabel('Damping Coefficient c (Ns/m)', fontsize=12, fontweight='bold')
-        ax5.set_ylabel('Suspension Force RMS (N)', fontsize=12, fontweight='bold')
-        ax5.set_title('Suspension Force RMS vs Damping', fontsize=14, fontweight='bold')
-        ax5.grid(True, alpha=0.3)
-        ax5.legend(fontsize=9)
-        
-        # Final formatting
-        plt.suptitle(f'{plot_data["vehicle_name"]} - {plot_data["road_name"]}\n'
-                     f'Newton: {plot_data["c_newton"]:.0f} Ns/m ({plot_data["comfort_newton"]:.6f}) | '
-                     f'Bisection: {plot_data["c_bisection"]:.0f} Ns/m ({plot_data["comfort_bisection"]:.6f}) | '
-                     f'Best: {plot_data["best_method"]}', 
-                     fontsize=16, fontweight='bold', y=0.95)
-        plt.tight_layout()
-        plt.show()
-        
-        print(f"  ✓ Plot generated: {result['vehicle']} on {result['road_name']}")
 
 '''
 Comprehensive Analysis Function
@@ -915,6 +827,7 @@ def run_comprehensive_analysis():
 
 #Main Execution of code
 all_results = run_comprehensive_analysis()
+
 
 
 
