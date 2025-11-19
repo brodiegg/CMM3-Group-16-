@@ -457,23 +457,31 @@ def solve_suspension_odes_euler(c, M1, M2, k, kt, road_spline, vehicle_speed, si
 
     return t_eul, y_eul
 
-# ============================================================================
-# COMFORT FUNCTIONS - WITH SEPARATED PENALTIES
-# ============================================================================
+'''
+Create Comfort Functions
+'''
 
-def create_comfort_function_smooth(vehicle_config, road_spline, vehicle_speed, sim_time):
-    """
-    Comfort function for SMOOTH roads with SMOOTH-only penalties
-    """
-    M1 = vehicle_config['M1']
-    M2 = vehicle_config['M2'] 
-    k = vehicle_config['k']
-    kt = vehicle_config['kt']
+def create_comfort_function_smooth(vehicle_config, vehicle_name, road_spline, vehicle_speed, sim_time):
+# creates the comfort rating via the comfort function: aw_rms + Penalties (deflection and suspension force) 
+# this function is optimised via root finding to find optimal c values
+# specifically for smooth road profiles as it uses smooth penalties    
+    
+    
+    # Extract vehicle parameters from configuration
+    M1 = vehicle_config['M1']  # Car body mass
+    M2 = vehicle_config['M2']  # Wheel mass
+    k = vehicle_config['k']    # Spring stiffness
+    kt = vehicle_config['kt']  # Tire stiffness
+    # Get appropriate penalty functions for smooth roads
+    deflection_func = vehicle_config['deflection_smooth']
+    force_func = vehicle_config['force_smooth']
     
     def comfort_function(c):
-        t_rk, y_rk = solve_suspension_odes_rk4(c, M1, M2, k, kt, road_spline, 
-                                              vehicle_speed, sim_time, h=0.001)
-        accel_rk = y_rk[1, :]
+        
+        # Solve suspension ODEs with current damping coefficient
+        t_rk, y_RK4 = solve_suspension_odes_rk4(c, M1, M2, k, kt, road_spline, vehicle_speed, sim_time, h=0.001)
+        # Extract car body acceleration (row 1 of state array)
+        accel_rk = y_RK4[1, :]
         
         # Apply ISO 2631 frequency weighting
         weighted_accel = apply_iso_filter_simple(accel_rk, t_rk, t_rk[1]-t_rk[0])
@@ -481,9 +489,9 @@ def create_comfort_function_smooth(vehicle_config, road_spline, vehicle_speed, s
         # Calculate comfort metrics (RMS/RMQ)
         comfort_value, crest_factor, metric_used, rms_value = calculate_comfort_metrics(weighted_accel, t_rk)
         
-        # Use SMOOTH-ONLY penalty functions
-        suspension_penalty, max_deflection = calculate_suspension_deflection_penalty_smooth(y_rk)
-        force_penalty, force_rms, suspension_force = calculate_suspension_force_penalty_smooth(y_rk, k, c)
+        # Use UNIFIED penalty functions - PASS vehicle_config
+        suspension_penalty, max_deflection = deflection_func(y_RK4, vehicle_config)
+        force_penalty, force_rms, suspension_force = force_func(y_RK4, vehicle_config, c, vehicle_speed)
         
         total_comfort = comfort_value + suspension_penalty + force_penalty
         
@@ -491,19 +499,24 @@ def create_comfort_function_smooth(vehicle_config, road_spline, vehicle_speed, s
     
     return comfort_function
 
-def create_comfort_function_rough(vehicle_config, road_spline, vehicle_speed, sim_time):
-    """
-    Comfort function for ROUGH roads with ROUGH-only penalties
-    """
+
+def create_comfort_function_rough(vehicle_config, vehicle_name, road_spline, vehicle_speed, sim_time):
+# creates the comfort rating via the comfort function: aw_rms + Penalties (deflection and suspension force) 
+# this function is optimised via root finding to find optimal c values
+# specifically for rough road profiles as it uses rough penalties  
+    
+    # Extract vehicle parameters
     M1 = vehicle_config['M1']
-    M2 = vehicle_config['M2'] 
+    M2 = vehicle_config['M2']
     k = vehicle_config['k']
     kt = vehicle_config['kt']
+    # Get rough road penalty functions
+    deflection_func = vehicle_config['deflection_rough']
+    force_func = vehicle_config['force_rough']
     
     def comfort_function(c):
-        t_rk, y_rk = solve_suspension_odes_rk4(c, M1, M2, k, kt, road_spline, 
-                                              vehicle_speed, sim_time, h=0.001)
-        accel_rk = y_rk[1, :]
+        t_rk, y_RK4 = solve_suspension_odes_rk4(c, M1, M2, k, kt, road_spline, vehicle_speed, sim_time, h=0.001)
+        accel_rk = y_RK4[1, :]
         
         # Apply ISO 2631 frequency weighting
         weighted_accel = apply_iso_filter_simple(accel_rk, t_rk, t_rk[1]-t_rk[0])
@@ -511,9 +524,9 @@ def create_comfort_function_rough(vehicle_config, road_spline, vehicle_speed, si
         # Calculate comfort metrics (RMS/RMQ)
         comfort_value, crest_factor, metric_used, rms_value = calculate_comfort_metrics(weighted_accel, t_rk)
 
-        # Use ROUGH-ONLY penalty functions
-        suspension_penalty, max_deflection = calculate_suspension_deflection_penalty_rough(y_rk)
-        force_penalty, force_rms, suspension_force = calculate_suspension_force_penalty_rough(y_rk, k, c)
+        # Use UNIFIED penalty functions - PASS vehicle_config
+        suspension_penalty, max_deflection = deflection_func(y_RK4, vehicle_config)
+        force_penalty, force_rms, suspension_force = force_func(y_RK4, vehicle_config, c, vehicle_speed)
         
         total_comfort = comfort_value + suspension_penalty + force_penalty
         
@@ -891,6 +904,7 @@ if __name__ == "__main__":
     
     # Run comprehensive analysis (simulations only)
     all_results = run_comprehensive_analysis()
+
 
 
 
