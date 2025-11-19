@@ -100,7 +100,6 @@ def force_smooth_penalty(y_RK4, vehicle_config, c, vehicle_speed=10):
     # Calculate vehicle-specific force thresholds for smooth roads
     h_typical = 0.01  # m - typical bump height for smooth roads; typical found via division of max; mean of absolute range
     h_max = 0.02      # m - maximum bump height for smooth roads
-    wavelength = 5    # m - typical wavelength for smooth roads (longer bumps)
 
     # Minimum force threshold: F_min ≈ k * h_typical : Hookes Law
     # Represents minimum force needed to respond to typical bumps
@@ -108,7 +107,7 @@ def force_smooth_penalty(y_RK4, vehicle_config, c, vehicle_speed=10):
 
     # Maximum force threshold: F_max = k*h_max + c*(v/λ)
     # Maximum acceptable force based on largest bump and velocity effects
-    ideal_max = k * h_max + c * (vehicle_speed / wavelength)
+    ideal_max = k * h_max 
 
     # Scalling penalty calculation for force levels
     if ideal_min <= force_rms <= ideal_max:         #Force within ideal range - no penalty
@@ -145,10 +144,9 @@ def force_rough_penalty(y_RK4, vehicle_config, c, vehicle_speed=10):
 
     h_typical = 0.25
     h_max = 0.5      
-    wavelength = 2    # m - shorter wavelength for rough roads (sharper bumps)
 
     ideal_min = k * h_typical
-    ideal_max = k * h_max + c * (vehicle_speed / wavelength)
+    ideal_max = k * h_max 
 
     if ideal_min <= force_rms <= ideal_max:
         penalty = 0.0
@@ -242,8 +240,8 @@ Vehicle Parameters
 # this allows us to build a robust range of values to compare with realworld sources.
 VEHICLE_CONFIGS = {
     'Tesla_Model_X': {
-        'M1': 592.5,               # Car body mass (kg) - sprung mass; [ curb mass + 80kg (person) ] / 4
-        'M2': 45,                  # Wheel assembly mass (kg) - unsprung mass; [tyre massm + brake calipers + brake discs]
+        'M1': 587.5,               # Car body mass (kg) - sprung mass; [ curb mass + 80kg (person) ] / 4
+        'M2': 50,                  # Wheel assembly mass (kg) - unsprung mass; [tyre massm + brake calipers + brake discs]
         'k': 22390,                # Spring stiffness (N/m) - suspension spring;  k = M1 * (2pi*fn)**2 where fn is natural frequencey set at 1 Hz
         'kt': 217440,              # Tire stiffness (N/m) - tire spring rate; found via a scale from a study, based on recommended tyre load index 
         'c_range': (500, 5000),    # Allowable damping coefficient range (Ns/m)
@@ -255,8 +253,8 @@ VEHICLE_CONFIGS = {
         'force_rough': force_rough_penalty
     },
     'BMW_i4': {
-        'M1': 551.25,              # Car body mass (kg)
-        'M2': 40,                  # Wheel assembly mass (kg)
+        'M1': 540,              # Car body mass (kg)
+        'M2': 50,                  # Wheel assembly mass (kg)
         'k': 21762,                # Spring stiffness (N/m)
         'kt': 207000,              # Tire stiffness (N/m)
         'c_range': (400, 4500),    # Damping coefficient range
@@ -267,8 +265,8 @@ VEHICLE_CONFIGS = {
         'force_rough': force_rough_penalty
     },
     'Nissan_Leaf': {
-        'M1': 422.5,               # Car body mass (kg)
-        'M2': 20,                  # Wheel assembly mass (kg)
+        'M1': 417.5,               # Car body mass (kg)
+        'M2': 50,                  # Wheel assembly mass (kg)
         'k': 16679,                # Spring stiffness (N/m)
         'kt': 159100,              # Tire stiffness (N/m)
         'c_range': (300, 4000),    # Damping coefficient range
@@ -866,6 +864,7 @@ def run_comprehensive_analysis():
 
 #Main Execution of code
 all_results = run_comprehensive_analysis()
+
 
 
 
