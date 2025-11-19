@@ -853,63 +853,69 @@ def generate_all_plots(all_results):
         
         print(f"  ✓ Plot generated: {result['vehicle']} on {result['road_name']}")
 
-# ============================================================================
-# COMPREHENSIVE ANALYSIS - ALL VEHICLES AND ROADS
-# ============================================================================
+'''
+Comprehensive Analysis Function
+'''
 
 def run_comprehensive_analysis():
-    """
-    Run analysis for all vehicle and road combinations
-    """
-    print("COMPREHENSIVE SUSPENSION ANALYSIS")
-    print("=" * 80)
-    print("3 VEHICLES × 6 ROADS = 18 COMBINATIONS")
-    print("=" * 80)
+  
+    print("Suspension Analysis")
+    print('-')
+    print("3 Vehicles: Tesla Model X, BMW i4, Nissan Leaf")
+    print("Simulated on 1 'Smooth' road and 1 'Rough' road")
+    print('-' )
     
-    # Generate road profiles
+    ## Generate road profiles
     road_profiles = {}
     
-    # 3 Smooth roads
-    for i in range(No_Road_Profiles):
+    # Create 1 Smooth road profile
+    # Uses seed=1 to ensure reproducible smooth road generation
+    for i in range(1):
         road_profiles[f"smooth_{i+1}"] = smooth_road_gen(1 + i, No_points_smooth, road_length, h_range_smooth)
     
-    # 3 Rough roads  
-    for i in range(No_Road_Profiles):
+    # Create 1 Rough road profile  
+    # Uses seed=4 to ensure different, reproducible rough road generation
+    for i in range(1): 
         road_profiles[f"rough_{i+1}"] = rough_road_gen(4 + i, No_points_rough, road_length, h_range_rough)
     
+    # List to store all analysis results
     all_results = []
     
-    # Analyze all combinations (without plotting)
-    print("\n🚀 RUNNING ALL SIMULATIONS...")
-    print("   (Graphs will be generated after all simulations complete)")
-    print("-" * 80)
+    # Analyze all combinations (with plotting)
+    print(" Running Simulations")
     
-    for vehicle_name in VEHICLE_CONFIGS.keys():
-        for road_key, road_spline in road_profiles.items():
+    # Test every vehicle on every road type
+    for vehicle_name in VEHICLE_CONFIGS.keys():           # Loop through Tesla, BMW, Nissan
+        for road_key, road_spline in road_profiles.items():  # Loop through smooth_1, rough_1
+        
+            # Extract road type and ID from key (e.g., "smooth_1" -> type="smooth", id="1")
             road_type, road_id = road_key.split('_')
+        
+            # Run complete analysis: find optimal damping and generate results
             result = analyze_vehicle_road_combination(vehicle_name, road_spline, road_type, road_id)
+        
+            # Store results for summary reporting
             all_results.append(result)
             
-            # Print quick summary for this combination
-            print(f"  ✓ {vehicle_name} on {result['road_name']}: "
-                  f"c_opt={result['c_optimal']:.0f} Ns/m, "
-                  f"comfort={result['comfort_optimal']:.6f}")
+    
+    print("Analysis Complete")
+    
+    # Print summary of all results
+    print('-')
+    print("Summary of all optimal solutions")
+    print('-')
+    for result in all_results:
+        print(f"{result['vehicle']} on {result['road_name']}:")
+        print(f"  Optimal c = {result['c_optimal']:.0f} Ns/m")
+        print(f"  Comfort = {result['comfort_optimal']:.6f}")
+        print(f"  Crest Factor = {result['crest_factor']:.2f}")
+        print(f"  Max Accel Diff (Euler vs RK4) = {result['max_accel_diff_percent']:+.2f}%")
     
     return all_results
 
-# ============================================================================
-# MAIN EXECUTION
-# ============================================================================
+#Main Execution of code
+all_results = run_comprehensive_analysis()
 
-if __name__ == "__main__":
-    print("COMPREHENSIVE VEHICLE-ROAD SUSPENSION ANALYSIS")
-    print("=" * 80)
-    print("3 Vehicles: Tesla Model X, BMW i4, Nissan Leaf")
-    print("6 Roads: 3 Smooth + 3 Rough")
-    print("=" * 80)
-    
-    # Run comprehensive analysis (simulations only)
-    all_results = run_comprehensive_analysis()
 
 
 
