@@ -352,39 +352,110 @@ def rough_road_gen(seed, No_points_rough, road_length, h_range_rough):
     
     return splrep(x_pos_rough, h_values_rough) # return cubic spline representation of the rough road
 
-# ============================================================================
-# ODE SOLVERS
-# ============================================================================
+
+'''
+ODE Solvers 
+'''
+
 
 def solve_suspension_odes_rk4(c, M1, M2, k, kt, road_spline, vehicle_speed, sim_time, h=0.001):
+# solve the quarter car ODEs based on these equations of motion; uses 4th-order Runge-Kutta method (RK4)
+# h is time step set to 0.001
+#       M1*x1_ddot = -k*(x1-x2) - c*(x1_dot-x2_dot)                 [Car body]
+#       M2*x2_ddot = k*(x1-x2) + c*(x1_dot-x2_dot) - kt*(x2-xr)     [Wheel assembly]
+    
+  
     def model(y, t):
+      
+        x1, x1_dot, x2, x2_dot = y           # Unpack state vector
+      
+        position = vehicle_speed * t         # Calculate current road position based on vehicle speed
+     
+        xr = splev(position, road_spline)    # Get road height at current position using spline interpolation
+
+        # Calculate accelerations using Newton's second law
+       
+        # Car body acceleration (sprung mass)
+        x1_ddot = -(k * (x1 - x2) + c * (x1_dot - x2_dot)) / M1
+        # Wheel assembly acceleration (unsprung mass)
+        x2_ddot = (k * (x1 - x2) + c * (x1_dot - x2_dot) - kt * (x2 - xr)) / M2
+
+        # Return derivatives: [velocity1, acceleration1, velocity2, acceleration2]
+        return [x1_dot, x1_ddot, x2_dot, x2_ddot]
+
+    # Calculate number of time steps needed
+    n_step = math.ceil(sim_time/h)
+    # Initialize state array: 4 states (x1, x1_dot, x2, x2_dot) × (n_step+1) time steps
+    y_RK4 = np.zeros((4, n_step+1))
+    # Initialize time array
+    t_rk = np.zeros(n_step+1)
+    # Set initial conditions: all states start at zero
+    y_RK4[:, 0] = [0, 0, 0, 0]
+    t_rk[0] = 0
+
+    # Create time array
+    for i in range(n_step):
+        t_rk[i+1] = t_rk[i] + h
+
+    # RK4 integration loop
+    for i in range(n_step):
+        y_current = y_RK4[:, i]  # Current state vector
+        t_current = t_rk[i]       # Current time
+
+        # RK4 method: calculate four intermediate slopes; k1,k2,k3,k4
+        
+        k1 = model(y_current, t_current)  # Slope at beginning of interval
+        # Slope at midpoint using k1
+        k2 = model(y_current + np.array(k1) * h/2, t_current + h/2)
+        # Slope at midpoint using k2
+        k3 = model(y_current + np.array(k2) * h/2, t_current + h/2)
+        # Slope at end of interval
+        k4 = model(y_current + np.array(k3) * h, t_current + h)
+
+        # Weighted average of slopes for final update
+        slope = (np.array(k1) + 2*np.array(k2) + 2*np.array(k3) + np.array(k4)) / 6
+        
+        # Update the state
+        y_RK4[:, i+1] = y_current + h * slope
+
+    return t_rk, y_RK4
+
+
+def solve_suspension_odes_euler(c, M1, M2, k, kt, road_spline, vehicle_speed, sim_time, h=0.001):
+# Euler method also impliment but as comparitive check to prove rk4 working corectly as ingeneral is less accurate then rk4    
+    
+    def model(y, t):
+        # same as before but for euler
         x1, x1_dot, x2, x2_dot = y
         position = vehicle_speed * t
         xr = splev(position, road_spline)
+        
         x1_ddot = -(k * (x1 - x2) + c * (x1_dot - x2_dot)) / M1
         x2_ddot = (k * (x1 - x2) + c * (x1_dot - x2_dot) - kt * (x2 - xr)) / M2
+        
         return [x1_dot, x1_ddot, x2_dot, x2_ddot]
 
+    # Euler implementation
     n_step = math.ceil(sim_time/h)
-    y_rk = np.zeros((4, n_step+1))
-    t_rk = np.zeros(n_step+1)
-    y_rk[:, 0] = [0, 0, 0, 0]
-    t_rk[0] = 0
-    
+    y_eul = np.zeros((4, n_step+1))  # State array for Euler method
+    t_eul = np.zeros(n_step+1)       # Time array
+
+    # Initial conditions
+    y_eul[:, 0] = [0, 0, 0, 0]
+    t_eul[0] = 0
+
+    # Create time array
     for i in range(n_step):
-        t_rk[i+1] = t_rk[i] + h
-    
+        t_eul[i+1] = t_eul[i] + h
+
+    # Euler integration loop - simpler than RK4
     for i in range(n_step):
-        y_current = y_rk[:, i]
-        t_current = t_rk[i]
-        k1 = model(y_current, t_current)
-        k2 = model(y_current + np.array(k1) * h/2, t_current + h/2)
-        k3 = model(y_current + np.array(k2) * h/2, t_current + h/2)
-        k4 = model(y_current + np.array(k3) * h, t_current + h)
-        slope = (np.array(k1) + 2*np.array(k2) + 2*np.array(k3) + np.array(k4)) / 6
-        y_rk[:, i+1] = y_current + h * slope
-    
-    return t_rk, y_rk
+        # Calculate slope at current point only
+        slope = model(y_eul[:, i], t_eul[i])
+        y_eul[:, i+1] = y_eul[:, i] + h * \
+            np.array(slope)  # Simple forward Euler update
+
+    return t_eul, y_eul
 
 # ============================================================================
 # COMFORT FUNCTIONS - WITH SEPARATED PENALTIES
@@ -820,6 +891,7 @@ if __name__ == "__main__":
     
     # Run comprehensive analysis (simulations only)
     all_results = run_comprehensive_analysis()
+
 
 
 
