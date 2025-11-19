@@ -233,23 +233,57 @@ def calculate_comfort_metrics(weighted_accel, time):
 # SYSTEM PARAMETERS
 # ============================================================================
 
+'''
+Vehicle Parameters
+'''
+
+# Dictionary containing parameters for the three different electric vehicles
+# we have choose 3 different types of EV, SUV (Tesla), Salon (BMW), then coupe (Nissan)
+# this allows us to build a robust range of values to compare with realworld sources.
 VEHICLE_CONFIGS = {
     'Tesla_Model_X': {
-        'M1': 625, 'M2': 50, 'k': 35000, 'kt': 250000, 
-        'c_range': (500, 5000), 'c_initial': 2500
+        'M1': 592.5,               # Car body mass (kg) - sprung mass; [ curb mass + 80kg (person) ] / 4
+        'M2': 45,                  # Wheel assembly mass (kg) - unsprung mass; [tyre massm + brake calipers + brake discs]
+        'k': 22390,                # Spring stiffness (N/m) - suspension spring;  k = M1 * (2pi*fn)**2 where fn is natural frequencey set at 1 Hz
+        'kt': 217440,              # Tire stiffness (N/m) - tire spring rate; found via a scale from a study, based on recommended tyre load index 
+        'c_range': (500, 5000),    # Allowable damping coefficient range (Ns/m)
+        'c_initial': 2500,         # Initial guess for damping coefficient (Ns/m)
+        # Reference to penalty functions for this vehicle
+        'deflection_smooth': deflection_smooth_penalty,
+        'deflection_rough': deflection_rough_penalty,
+        'force_smooth': force_smooth_penalty,
+        'force_rough': force_rough_penalty
     },
     'BMW_i4': {
-        'M1': 550, 'M2': 45, 'k': 30000, 'kt': 230000,
-        'c_range': (400, 4500), 'c_initial': 2250
+        'M1': 551.25,              # Car body mass (kg)
+        'M2': 40,                  # Wheel assembly mass (kg)
+        'k': 21762,                # Spring stiffness (N/m)
+        'kt': 207000,              # Tire stiffness (N/m)
+        'c_range': (400, 4500),    # Damping coefficient range
+        'c_initial': 2250,         # Initial damping guess
+        'deflection_smooth': deflection_smooth_penalty,
+        'deflection_rough': deflection_rough_penalty,
+        'force_smooth': force_smooth_penalty,
+        'force_rough': force_rough_penalty
     },
     'Nissan_Leaf': {
-        'M1': 500, 'M2': 40, 'k': 25000, 'kt': 200000,
-        'c_range': (300, 4000), 'c_initial': 2000
+        'M1': 422.5,               # Car body mass (kg)
+        'M2': 20,                  # Wheel assembly mass (kg)
+        'k': 16679,                # Spring stiffness (N/m)
+        'kt': 159100,              # Tire stiffness (N/m)
+        'c_range': (300, 4000),    # Damping coefficient range
+        'c_initial': 2000,         # Initial damping guess
+        'deflection_smooth': deflection_smooth_penalty,
+        'deflection_rough': deflection_rough_penalty,
+        'force_smooth': force_smooth_penalty,
+        'force_rough': force_rough_penalty
     }
 }
-VEHICLE_SPEED = 10
-SIM_TIME = 8
-DT = 0.01
+
+# Simulation constants used across all vehicle and road combinations
+VEHICLE_SPEED = 10    # Constant vehicle speed in m/s
+SIM_TIME = 8          # Total simulation time in seconds
+DT = 0.01             # Time step for some calculations (not always used)
 
 # ============================================================================
 # ROAD PROFILE GENERATION
@@ -786,6 +820,7 @@ if __name__ == "__main__":
     
     # Run comprehensive analysis (simulations only)
     all_results = run_comprehensive_analysis()
+
 
 
 
