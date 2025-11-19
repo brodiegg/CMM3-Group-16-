@@ -3,6 +3,165 @@ import matplotlib.pyplot as plt
 from scipy.interpolate import splrep, splev
 import math
 
+'''
+Penalty Systems
+'''
+
+def deflection_smooth_penalty(y_RK4, vehicle_config, max_suspension_travel=0.25):
+
+    # Extract vehicle parameters from configuration dictionary
+    M1 = vehicle_config['M1']  # Car body mass (kg)
+    k = vehicle_config['k']    # Spring stiffness (N/m)
+
+    # Extract displacements from simulation results array
+    # y_RK4 state vector: [x1, x1_dot, x2, x2_dot] where:
+    x1 = y_RK4[0, :]  # Car body position (m)
+    x2 = y_RK4[2, :]  # Wheel position (m)
+
+    # Calculate suspension deflection: absolute difference
+    suspension_deflection = np.abs(x1 - x2)
+    # between body and wheel positions
+    # Find maximum deflection value across entire simulation
+    max_deflection = np.max(suspension_deflection)
+
+    # Calculate vehicle-specific soft limit based on ISO 2631 comfort standard
+    # using equation x_soft = M1 * a_comfort / k; refferenced in report
+    # m/s²  value from reference: based on ISO 2631 defined as "not uncomfortable" acceleration threshold
+    a_comfort = 0.715
+    soft_limit = (M1 * a_comfort) / k   # Calculate soft deflection limit
+    # Hard limit is the maximum allowed suspension travel; set at 15cm when in 'casual mode'
+    hard_limit = max_suspension_travel
+
+    # Scaling penalty calculation
+    if max_deflection <= soft_limit:     # Deflection within comfortable range: no penalty
+        penalty = 0.0
+
+    elif max_deflection <= hard_limit:   # Deflection between soft and hard limits
+        ratio = (max_deflection - soft_limit) / (hard_limit - soft_limit)
+        # The square produces a parabola curve scaling. Good For Graph!
+        penalty = 0.5 * (ratio ** 2)
+
+    else:
+        # Deflection exceeds hard limit: severe penalty
+        excess_ratio = (max_deflection - hard_limit) / hard_limit
+        # 0.5 needed for continuity
+        penalty = 0.5 + 5.0 * excess_ratio
+
+    # Peturn for reporting and confort rating creation
+    return penalty, max_deflection
+
+
+def deflection_rough_penalty(y_RK4, vehicle_config, max_suspension_travel=0.4):
+
+    # Extract displacements from simulation results
+    x1 = y_RK4[0, :]
+    x2 = y_RK4[2, :]  
+
+    # Calculate suspension deflection and find maximum value; same as before
+    suspension_deflection = np.abs(x1 - x2)
+    max_deflection = np.max(suspension_deflection)
+
+    # On rough roads we have set more accepting limits; to handle larger bumps
+    soft_limit = 0.75 * max_suspension_travel   # Soft limit at 75% of hard limit
+    # Hard limit is the maximum allowed suspension travel; set at 40cm when in 'off road' mode
+    hard_limit = max_suspension_travel
+
+    # scalling penalty calculation; same as before; kept same for equal treatment
+    if max_deflection <= soft_limit:
+        penalty = 0.0
+    elif max_deflection <= hard_limit:
+        ratio = (max_deflection - soft_limit) / (hard_limit - soft_limit)
+        penalty = 0.5 * (ratio ** 2)
+    else:
+        excess_ratio = (max_deflection - hard_limit) / hard_limit
+        penalty = 0.5 + 5.0 * excess_ratio
+
+    return penalty, max_deflection
+
+
+def force_smooth_penalty(y_RK4, vehicle_config, c, vehicle_speed=10):
+
+    # Extract vehicle parameters needed for force calculations
+    k = vehicle_config['k']  # Spring stiffness (N/m)
+
+    # Extract all state variables from simulation results from state vector.
+    # y_RK4 structure: [x1, x1_dot, x2, x2_dot]; thus pull from rows (python starts at 0)
+    x1 = y_RK4[0, :]      # Car body position   (m)
+    x2 = y_RK4[2, :]      # Wheel position      (m)
+    x1_dot = y_RK4[1, :]  # Car body velocity   (m/s)
+    x2_dot = y_RK4[3, :]  # Wheel velocity      (m/s)
+
+    # Calculate suspension force using spring and damper components
+    # F = k*(x1-x2) + c*(x1_dot - x2_dot) - standard quarter-car model force
+    suspension_force = k * (x1 - x2) + c * (x1_dot - x2_dot)
+    # Calculate Root Mean Square of suspension force over time; good as it takes into account +- better than an average!
+    force_rms = np.sqrt(np.mean(suspension_force**2))
+
+    # Calculate vehicle-specific force thresholds for smooth roads
+    h_typical = 0.01  # m - typical bump height for smooth roads; typical found via division of max; mean of absolute range
+    h_max = 0.02      # m - maximum bump height for smooth roads
+    wavelength = 5    # m - typical wavelength for smooth roads (longer bumps)
+
+    # Minimum force threshold: F_min ≈ k * h_typical : Hookes Law
+    # Represents minimum force needed to respond to typical bumps
+    ideal_min = k * h_typical
+
+    # Maximum force threshold: F_max = k*h_max + c*(v/λ)
+    # Maximum acceptable force based on largest bump and velocity effects
+    ideal_max = k * h_max + c * (vehicle_speed / wavelength)
+
+    # Scalling penalty calculation for force levels
+    if ideal_min <= force_rms <= ideal_max:         #Force within ideal range - no penalty
+        penalty = 0.0
+    
+    elif force_rms < ideal_min:                     #Too little force, insufficent control (suspension too soft)
+        deficit_ratio = (ideal_min - force_rms) / ideal_min
+        penalty = 0.5 * (deficit_ratio ** 2)        # The square produces a parabola curve scaling. Good For Graph!
+    
+    else:                                           # Too much force; potential damge to system, hard penalty
+        excess_ratio = (force_rms - ideal_max) / ideal_max
+        penalty = 5.0 * (excess_ratio ** 2)
+
+    return penalty, force_rms, suspension_force         #returns used in reporting
+
+
+def force_rough_penalty(y_RK4, vehicle_config, c, vehicle_speed=10):
+
+# same setup as before but with different h values due to change in road profile type.
+# we took average for the range we set for the impulses (40-60cm); 50cm and set as max, then h_typical being half this.
+# 50cm is over the max suspenin allowed thus it is severley penalised if deflection gets close to being that large.  
+
+    k = vehicle_config['k']
+
+    x1 = y_RK4[0, :]      
+    x2 = y_RK4[2, :]      
+    x1_dot = y_RK4[1, :]  
+    x2_dot = y_RK4[3, :]  
+
+    # Calculate suspension force using spring and damper components
+    suspension_force = k * (x1 - x2) + c * (x1_dot - x2_dot)
+    # Calculate Root Mean Square of force over time
+    force_rms = np.sqrt(np.mean(suspension_force**2))
+
+    h_typical = 0.25
+    h_max = 0.5      
+    wavelength = 2    # m - shorter wavelength for rough roads (sharper bumps)
+
+    ideal_min = k * h_typical
+    ideal_max = k * h_max + c * (vehicle_speed / wavelength)
+
+    if ideal_min <= force_rms <= ideal_max:
+        penalty = 0.0
+    elif force_rms < ideal_min:
+        deficit_ratio = (ideal_min - force_rms) / ideal_min
+        penalty = 0.5 * (deficit_ratio ** 2)
+    else:
+        excess_ratio = (force_rms - ideal_max) / ideal_max
+        penalty = 5.0 * (excess_ratio ** 2)
+
+    return penalty, force_rms, suspension_force
+
+
 # ============================================================================
 # ISO 2631 FILTER (ORIGINAL POLYNOMIAL METHOD)
 # ============================================================================
@@ -63,117 +222,7 @@ def calculate_comfort_metrics(weighted_accel, time):
     else:
         return rms_value, crest_factor, 'RMS', rms_value
 
-# ============================================================================
-# SEPARATED PENALTY SYSTEMS - COMPLETELY ISOLATED
-# ============================================================================
 
-def calculate_suspension_deflection_penalty_smooth(y_rk, max_suspension_travel=0.15):
-    """
-    Suspension deflection penalty for SMOOTH roads only
-    """
-    x1 = y_rk[0, :]
-    x2 = y_rk[2, :]
-    suspension_deflection = np.abs(x1 - x2)
-    max_deflection = np.max(suspension_deflection)
-    
-    # SMOOTH ROAD PENALTIES ONLY
-    soft_limit = 0.01  # 1cm - start penalizing
-    hard_limit = max_suspension_travel  # 15cm - maximum
-    
-    if max_deflection <= soft_limit:
-        penalty = 0.0
-    elif max_deflection <= hard_limit:
-        ratio = (max_deflection - soft_limit) / (hard_limit - soft_limit)
-        penalty = 5 * (ratio ** 2)  # 0 to 0.5
-    else:
-        excess_ratio = (max_deflection - hard_limit) / hard_limit
-        penalty = 0.5 + 5.0 * excess_ratio
-    
-    return penalty, max_deflection
-
-def calculate_suspension_deflection_penalty_rough(y_rk, max_suspension_travel=0.4):
-    """
-    Suspension deflection penalty for ROUGH roads only
-    """
-    x1 = y_rk[0, :]
-    x2 = y_rk[2, :]
-    suspension_deflection = np.abs(x1 - x2)
-    max_deflection = np.max(suspension_deflection)
-    
-    # ROUGH ROAD PENALTIES ONLY - more forgiving
-    soft_limit = 0.3  # 12cm - start penalizing
-    hard_limit = max_suspension_travel
-    
-    if max_deflection <= soft_limit:
-        penalty = 0.0
-    elif max_deflection <= hard_limit:
-        ratio = (max_deflection - soft_limit) / (hard_limit - soft_limit)
-        penalty =  5 * (ratio ** 2)  # 0 to 0.3
-    else:
-        excess_ratio = (max_deflection - hard_limit) / hard_limit
-        penalty = 0.3 + 3.0 * excess_ratio
-    
-    return penalty, max_deflection
-
-def calculate_suspension_force_penalty_smooth(y_rk, k, c):
-    """
-    Suspension force penalty for SMOOTH roads only
-    """
-    x1 = y_rk[0, :]
-    x2 = y_rk[2, :]
-    x1_dot = y_rk[1, :]
-    x2_dot = y_rk[3, :]
-    
-    suspension_force = k * (x1 - x2) + c * (x1_dot - x2_dot)
-    force_rms = np.sqrt(np.mean(suspension_force**2))
-    
-    # SMOOTH ROAD FORCE TARGETS
-    ideal_min = 270.0
-    ideal_max = 1000.0
-    
-    if ideal_min <= force_rms <= ideal_max:
-        penalty = 0.0
-    elif force_rms < ideal_min:
-        deficit_ratio = (ideal_min - force_rms) / ideal_min
-        penalty = 0.5 * (deficit_ratio ** 2)
-    else:  # force_rms > ideal_max
-        excess_ratio = (force_rms - ideal_max) / ideal_max
-        penalty = 1 * (excess_ratio ** 2)
-    
-    # Cap maximum penalty for smooth roads
-    penalty = min(penalty, 1.5)
-    
-    return penalty, force_rms, suspension_force
-
-def calculate_suspension_force_penalty_rough(y_rk, k, c):
-    """
-    Suspension force penalty for ROUGH roads only
-    """
-    x1 = y_rk[0, :]
-    x2 = y_rk[2, :]
-    x1_dot = y_rk[1, :]
-    x2_dot = y_rk[3, :]
-    
-    suspension_force = k * (x1 - x2) + c * (x1_dot - x2_dot)
-    force_rms = np.sqrt(np.mean(suspension_force**2))
-    
-    # ROUGH ROAD FORCE TARGETS - higher thresholds
-    ideal_min = 2000.0
-    ideal_max = 5000.0
-    
-    if ideal_min <= force_rms <= ideal_max:
-        penalty = 0.0
-    elif force_rms < ideal_min:
-        deficit_ratio = (ideal_min - force_rms) / ideal_min
-        penalty = 0.1 * (deficit_ratio ** 2)
-    else:  # force_rms > ideal_max
-        excess_ratio = (force_rms - ideal_max) / ideal_max
-        penalty = 5 * (excess_ratio ** 2)
-    
-    # Cap maximum penalty for rough roads
-    penalty = min(penalty, 2.0)
-    
-    return penalty, force_rms, suspension_force
 
 # ============================================================================
 # SYSTEM PARAMETERS
@@ -732,4 +781,5 @@ if __name__ == "__main__":
     
     # Run comprehensive analysis (simulations only)
     all_results = run_comprehensive_analysis()
+
 
