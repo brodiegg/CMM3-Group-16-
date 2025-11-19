@@ -279,9 +279,9 @@ VEHICLE_CONFIGS = {
 }
 
 # Simulation constants used across all vehicle and road combinations
-VEHICLE_SPEED = 10    # Constant vehicle speed in m/s
-SIM_TIME = 8          # Total simulation time in seconds
-DT = 0.01             # Time step for some calculations (not always used)
+Vehicle_Speed = 10    # Constant vehicle speed in m/s
+Sim_Time = 8          # Total simulation time in seconds
+
 
 
 '''
@@ -664,10 +664,10 @@ def analyze_vehicle_road_combination(vehicle_name, road_spline, road_type, road_
     
     # Choose the appropriate comfort function based on road type
     if road_type == "smooth":
-        comfort_func = create_comfort_function_smooth(config, vehicle_name, road_spline, VEHICLE_SPEED, SIM_TIME)
+        comfort_func = create_comfort_function_smooth(config, vehicle_name, road_spline, Vehicle_Speed, Sim_Time)
         road_name = f"Smooth_Road_{road_id}"
     else:
-        comfort_func = create_comfort_function_rough(config, vehicle_name, road_spline, VEHICLE_SPEED, SIM_TIME)
+        comfort_func = create_comfort_function_rough(config, vehicle_name, road_spline, Vehicle_Speed, Sim_Time)
         road_name = f"Rough_Road_{road_id}"
     
     print('-')
@@ -702,11 +702,11 @@ def analyze_vehicle_road_combination(vehicle_name, road_spline, road_type, road_
         best_method = "Bisection"
     
     # Get detailed results for optimal point using RK4 (main method)
-    t_rk, y_RK4  = solve_suspension_odes_rk4(c_optimal, config['M1'], config['M2'], config['k'], config['kt'], road_spline, VEHICLE_SPEED, SIM_TIME, h=0.001)
+    t_rk, y_RK4  = solve_suspension_odes_rk4(c_optimal, config['M1'], config['M2'], config['k'], config['kt'], road_spline, Vehicle_Speed, Sim_Time, h=0.001)
     accel_rk = y_RK4 [1, :]
     
     # Also solve with Euler for comparison
-    t_eul, y_eul = solve_suspension_odes_euler(c_optimal, config['M1'], config['M2'], config['k'], config['kt'], road_spline, VEHICLE_SPEED, SIM_TIME, h=0.001)
+    t_eul, y_eul = solve_suspension_odes_euler(c_optimal, config['M1'], config['M2'], config['k'], config['kt'], road_spline, Vehicle_Speed, Sim_Time, h=0.001)
     
     accel_eul = y_eul[1, :]
     
@@ -734,7 +734,7 @@ def analyze_vehicle_road_combination(vehicle_name, road_spline, road_type, road_
 
     # Calculate penalties for the optimal solution
     suspension_penalty_opt, max_deflection_opt = deflection_func(y_RK4, config)
-    force_penalty_opt, force_rms_opt, _  = force_func(y_RK4, config, c_optimal, VEHICLE_SPEED) # '_'  python convention for ignoring/unwanted variables 
+    force_penalty_opt, force_rms_opt, _  = force_func(y_RK4, config, c_optimal, Vehicle_Speed) # '_'  python convention for ignoring/unwanted variables 
     
     # Print detailed breakdown for optimal solution
     print("-")
@@ -775,7 +775,7 @@ def analyze_vehicle_road_combination(vehicle_name, road_spline, road_type, road_
     ax2.set_ylabel('Weighted Acceleration (m/s²)', fontsize=12, fontweight='bold')
     ax2.set_title(f'ISO 2631 Filtered Acceleration\n(CF={crest_factor_opt:.2f}, {metric_used_opt})', fontsize=14, fontweight='bold')
     ax2.grid(True, alpha=0.3)
-    ax2.set_xlim([0, SIM_TIME])
+    ax2.set_xlim([0, Sim_Time])
     ax2.legend()
     
     # GRAPH 3: Comfort vs Damping (SHOW BOTH FINAL RESULTS ONLY)
@@ -864,6 +864,7 @@ def run_comprehensive_analysis():
 
 #Main Execution of code
 all_results = run_comprehensive_analysis()
+
 
 
 
