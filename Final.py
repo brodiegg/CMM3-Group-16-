@@ -204,23 +204,28 @@ def apply_iso_filter_simple(signal, time, dt):
     
     return filtered_signal
 
-# ============================================================================
-# RMS/RMQ CALCULATOR WITH CREST FACTOR
-# ============================================================================
+'''
+RMS/RMQ + Cresft Factor CF
+'''
 
 def calculate_comfort_metrics(weighted_accel, time):
-    """
-    Calculate RMS or RMQ based on crest factor as per ISO 2631
-    """
+  
+    
+    # Calculate Root Mean Square of weighted acceleration
     rms_value = np.sqrt(np.mean(weighted_accel**2))
+    # Find peak acceleration (absolute maximum)
     peak = np.max(np.abs(weighted_accel))
+    # Calculate crest factor = peak / RMS
     crest_factor = peak / rms_value if rms_value > 0 else 0
     
+    # ISO 2631: Use RMQ for signals with crest factor > 9 (highly transient signals)
     if crest_factor > 9:
+        # RMQ = 4th root of mean of 4th power - more sensitive to peaks
         rmq_value = (np.mean(weighted_accel**4))**0.25
         return rmq_value, crest_factor, 'RMQ', rms_value
     else:
-        return rms_value, crest_factor, 'RMS', rms_value
+        return rms_value, crest_factor, 'RMS', rms_value # Use standard RMS for signals with lower crest factors
+
 
 
 
@@ -781,5 +786,6 @@ if __name__ == "__main__":
     
     # Run comprehensive analysis (simulations only)
     all_results = run_comprehensive_analysis()
+
 
 
