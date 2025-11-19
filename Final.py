@@ -541,10 +541,10 @@ def create_comfort_function_rough(vehicle_config, vehicle_name, road_spline, veh
 def bisection(f, a, b, N):
     """Bisection method for finding minimum"""
     print(f"Bisection method: searching in [{a}, {b}] with {N} iterations")
-    
+    #Loading the initial values as the left boundary
     best_c = a
     best_value = f(a)
-    
+    #Iterate N times to narrow down the interval, generating midpoints and evaluating function values
     for n in range(1, N+1):
         mid = (a + b) / 2
         f_mid = f(mid)
@@ -554,15 +554,18 @@ def bisection(f, a, b, N):
         f_right = f(right_mid)
         
         print(f"Bisection iter {n}: c={mid:.1f}, f(c)={f_mid:.6f}")
-        
+ #Compare and update the best found value and corresponding c       
+        #Load midpoint value if it's the best so far    
         if f_mid < best_value:
             best_value = f_mid
             best_c = mid
-        
+        #Using left most section if left is the lowest
         if f_left < f_mid and f_left < f_right:
             b = mid
+        #Using right most section if right is the lowest
         elif f_right < f_mid and f_right < f_left:
             a = mid
+        #Using middle section otherwise
         else:
             a = left_mid
             b = right_mid
@@ -572,11 +575,12 @@ def bisection(f, a, b, N):
 
 def newton_numerical(f, x0, x_range, h=10, epsilon=1e-6, max_iter=20):
     """Newton-Raphson method with numerical derivatives"""
+    #Loading initial guess and range boundary
     xn = x0
     x_min, x_max = x_range
     
     print(f"Newton-Raphson: starting from c={x0}, range [{x_min}, {x_max}]")
-    
+    #Apply Finite Difference method to approximate first and second derivatives
     for n in range(max_iter):
         f_xn = f(xn)
         f_plus = f(xn + h)
@@ -585,23 +589,25 @@ def newton_numerical(f, x0, x_range, h=10, epsilon=1e-6, max_iter=20):
         D2f_xn = (f_plus - 2*f_xn + f_minus) / (h**2)
         
         print(f"Newton iter {n+1}: c={xn:.1f}, f(c)={f_xn:.6f}, f'(c)={Df_xn:.6f}")
-        
+        #check for convergence based on gradient value
         if abs(Df_xn) < epsilon:
             print(f"Newton converged: gradient is near zero")
             return xn, f_xn
-        
+        #Check for small second derivative to avoid division instability
         if abs(D2f_xn) < 1e-10:
             print(f"Newton: small second derivative, using gradient descent")
+            #Change to gradient descent step
             xn_new = xn - 0.1 * Df_xn
+        #Standard Newton-Raphson equation
         else:
             xn_new = xn - Df_xn / D2f_xn
-        
+        #Ensure new guess is within specified bounds
         xn_new = np.clip(xn_new, x_min, x_max)
-        
+         # Check convergence by parameter change
         if abs(xn_new - xn) < epsilon:
             print(f"Newton converged: small parameter change")
             return xn_new, f(xn_new)
-        
+        # Update for next iteration
         xn = xn_new
     
     print(f"Newton reached maximum iterations")
@@ -904,6 +910,7 @@ if __name__ == "__main__":
     
     # Run comprehensive analysis (simulations only)
     all_results = run_comprehensive_analysis()
+
 
 
 
