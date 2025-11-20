@@ -159,10 +159,9 @@ def force_rough_penalty(y_RK4, vehicle_config, c, vehicle_speed=10):
 
     return penalty, force_rms, suspension_force
 
-
-# ============================================================================
-# ISO 2631 FILTER (ORIGINAL POLYNOMIAL METHOD)
-# ============================================================================
+'''
+ISO 2631 Filter (Original Polynomial Method)
+'''
 
 # ISO 2631 frequency weighting data
 ISO_freq = np.array([0.5, 0.63, 0.8, 1.0, 1.25, 1.6, 2.0, 2.5, 3.15, 4.0,
@@ -224,13 +223,6 @@ def calculate_comfort_metrics(weighted_accel, time):
     else:
         return rms_value, crest_factor, 'RMS', rms_value # Use standard RMS for signals with lower crest factors
 
-
-
-
-# ============================================================================
-# SYSTEM PARAMETERS
-# ============================================================================
-
 '''
 Vehicle Parameters
 '''
@@ -282,12 +274,9 @@ VEHICLE_CONFIGS = {
 Vehicle_Speed = 10    # Constant vehicle speed in m/s
 Sim_Time = 8          # Total simulation time in seconds
 
-
-
 '''
 Road Profile Generation
 '''
-
 
 road_length = 100 # Total road length in meters
 No_points_smooth = 20 # Number of sample points for smooth road
@@ -389,11 +378,9 @@ def rough_road_gen(seed, No_points_rough, road_length, h_range_rough):
     # return cubic spline representation of the rough road
     return splrep(x_pos_rough, h_values_rough)
 
-
 '''
 ODE Solvers 
 '''
-
 
 def solve_suspension_odes_rk4(c, M1, M2, k, kt, road_spline, vehicle_speed, sim_time, h=0.001):
 # solve the quarter car ODEs based on these equations of motion; uses 4th-order Runge-Kutta method (RK4)
@@ -570,10 +557,10 @@ def create_comfort_function_rough(vehicle_config, vehicle_name, road_spline, veh
         return total_comfort
     
     return comfort_function
-
-# ============================================================================
-# ROOT FINDING METHODS
-# ============================================================================
+    
+'''
+Root Finding Methods
+'''
 
 def bisection(f, a, b, N):
     """Bisection method for finding minimum"""
@@ -864,6 +851,7 @@ def run_comprehensive_analysis():
 
 #Main Execution of code
 all_results = run_comprehensive_analysis()
+
 
 
 
