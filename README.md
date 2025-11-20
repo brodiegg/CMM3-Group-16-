@@ -20,7 +20,7 @@ __Requirements__
 ## Key Features
 
 <details>
-  <summary>1. ODEs (Lines 356 - 458)</summary>
+  <summary>1. ODEs (Lines 385 - 482)</summary>
 
 - Converts the coupled second-order suspension equations into a first-order state system
 - Solves the time-domain dynamics using a fixed-step RK4 and Forward Euler
@@ -28,7 +28,7 @@ __Requirements__
 </details>
 
 <details>
-  <summary>2. Interpolation (Lines 299 - 353) & Regression (Lines 179 - 183)</summary>
+  <summary>2. Interpolation (Lines 281 - 379) & Regression (Lines 176 - 180)</summary>
 
 - Road height samples are turned into a smooth continuous function using cubic spline interpolation
 - ISO frequency-weighting data is fitted with polynomial regression to create a continuous comfort weighting curve
@@ -36,7 +36,7 @@ __Requirements__
 </details>
 
 <details>
-  <summary>3. Root Finding (Lines 541 - 614)</summary>
+  <summary>3. Root Finding (Lines 565 - 638)</summary>
 
 - The optimal damping coefficient `c` is estimated by minimizing the comfort function
 - Uses both Newton–Raphson and Bisection methods
